@@ -1,0 +1,120 @@
+JOKR OVERRIDE - WHAT TO TUNE
+============================
+
+Tune in this order. Do not tune PID to hide a mechanical, sensor, or geometry
+problem. Use a clear practice area, keep people clear, and have a spotter ready
+to disable the robot.
+
+
+1. VERIFY THE ROBOT
+-------------------
+Before any tuning, verify motor ports/directions, gearing, wheel size, tire
+condition, tracker contact, and IMU mounting. Current drivetrain:
+  Left: -8, -2, -1 (blue)
+  Right: 3, 9, 10 (blue)
+  IMU: 18
+  Vertical tracking wheel: port -17; horizontal tracker is disabled
+
+Measure actual robot travel with a tape. If encoder distance is consistently
+wrong, correct `wheel_distance_in` in src/rw-config.cpp first. Confirm the
+robot's turn direction and IMU reading; measure/correct `imu_scale` only if a
+full physical turn does not read approximately 360 degrees. Then check
+odometry against measured movement before trusting field-coordinate paths.
+
+
+2. RUN THE DRIVE PID AUTOTUNER
+------------------------------
+`autonomous()` in src/main.cpp is currently set to `runDriveAutotune()`, so no
+source edit is needed to start tuning. Use a practice session, not a match.
+The routine needs clear space for repeated
+24-inch drives and 90-degree turns. It alternates forward/reverse drive trials
+and clockwise/counterclockwise turns instead of turning and driving back to a
+start point after each trial. The phases tune linear drive and velocity first,
+turning second, and heading correction last. In autonomous, press A to start
+the PID search; press B on the controller or disable the robot to abort. It
+tunes:
+  distance_kp, distance_kd
+  turn_kp, turn_kd
+  heading_correction_kp, heading_correction_kd
+  drive_velocity_kP
+
+Integral gains are not part of this search; leave them unchanged. The tuner
+performs repeated trials and final validation. Treat a review/failure result as
+not ready for competition; check setup, consistency, and the reported gains
+before trying again.
+There is a 250 ms settling pause between motion trials. Drive and turn checks
+use 0.5 in and 1 degree, matching RW's built-in motion arrival tolerances;
+those tolerances are fixed inside the RW library and are not independently
+adjustable by this project's autotuner.
+
+The robot must be enabled in autonomous for the tuner to start. Keep a spotter
+at the disable control and ensure the robot has room to drive and turn. After
+tuning, change `autonomous()` back to the desired match routine before using
+the robot in a match.
+
+To preview the realistic search in RW's simulator from a neutral starting pose,
+run:
+  wsl sh sim/run-sim.sh --autotune --start "0,0,0" --seed 1
+The simulator-only baseline uses Kp=1, Ki=0, Kd=0 for drive/turn, a strong
+heading correction seed, and velocity Kp=0. It reports each candidate and
+writes a replay. Simulated values are not hardware settings.
+
+The tuner saves validated settings to `rw_drive_tuning.txt` on the Brain SD
+card and loads them at startup. Without a working SD card, copy the displayed
+values into src/rw-config.cpp.
+
+
+3. MEASURE DRIVE FEEDFORWARD (OPTIONAL)
+---------------------------------------
+Run `runDriveAutotune()` again and press X for the kS/kV/kA calibration. Clear
+at least 3 feet in front and behind the robot. It drives forward and backward
+in short voltage steps; cancel or disable to stop it. Do not run this if the
+area is not clear.
+
+These are already shown in the autotuner's results:
+  drive_kS: voltage needed to start moving
+  drive_kV: voltage per inch/second
+  drive_kA: voltage per inch/second squared
+
+When calibration passes its checks, the values are saved with the PID settings
+to SD. Otherwise, leave drive_kV and drive_kA at 0 so RW estimates them, and
+do not replace the current values with a failed measurement.
+
+
+4. TUNE ONLY WHAT STILL LOOKS WRONG
+-----------------------------------
+Profiles and paths: if those routines are used and still slip or miss after
+the drive tuning, adjust one setting at a time in src/rw-config.cpp:
+  profile_max_accel       lower to reduce wheel slip
+  profile_max_speed       set only to override the automatic speed
+  profile_turn_speed /
+  profile_turn_accel      adjust profiled turns if needed
+  path_lookahead          smaller tracks tighter; larger is smoother
+  path_max_lateral_accel  lower to slow down in curves
+
+Driver feel: adjust `driver_curve` or `driver_deadband` based on driver
+practice, not autonomous results.
+
+Mechanisms: tune `lift_positions` only after measuring safe preset angles.
+Then adjust `lift_kp`, `lift_kd`, or `lift_hold_mv` one at a time if the lift
+misses, overshoots, or sags. Verify intake and side-toggle direction and
+clearance before changing their behavior.
+
+Sensors: distance-sensor offsets are currently zero placeholders. Measure and
+set the actual offsets before enabling wall-based odometry resets. MCL is not
+started by the current pre-autonomous code, so do not tune MCL for this robot.
+
+
+5. VERIFY THE MATCH ROUTINE
+---------------------------
+Test the selected routine in src/main.cpp from its real starting position.
+Repeat the full routine at least three times; record where it misses, slips,
+or runs out of time. Tune that segment or mechanism only, then repeat. Do not
+change multiple settings between runs.
+
+Relevant files:
+  src/main.cpp          selects the autonomous routine
+  src/drive-autotune.cpp PID/feedforward tuning and SD settings
+  src/rw-config.cpp     drivetrain geometry and RW settings
+  src/lift.cpp          lift gains and preset positions
+  src/rw-autons.cpp     autonomous routines
