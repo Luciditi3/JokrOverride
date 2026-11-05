@@ -10,10 +10,13 @@
 #include <cstdio>
 
 namespace {
+#ifdef JOKR_HAS_INTAKE_MOTOR
 std::atomic<bool> intake_active{false};
+#endif
 }
 
 void initializeClaw() {
+#ifdef JOKR_HAS_INTAKE_MOTOR
 	if (intake_motor.set_brake_mode(pros::MotorBrake::brake) == PROS_ERR) {
 		robot_screen::showError("claw brake mode", errno);
 	}
@@ -47,29 +50,40 @@ void initializeClaw() {
 	if (intake_load_task == nullptr) {
 		robot_screen::showError("claw task", errno);
 	}
+#endif
 }
 
 void intakeClaw() {
+#ifdef JOKR_HAS_INTAKE_MOTOR
 	intake_active.store(true);
 	intake_motor.move_voltage(12000);
+#endif
 }
 
 void openClaw() {
+#ifdef JOKR_HAS_INTAKE_MOTOR
 	intake_active.store(false);
 	intake_motor.move_voltage(-12000);
+#endif
 }
 
 void stopClaw() {
+#ifdef JOKR_HAS_INTAKE_MOTOR
 	intake_active.store(false);
 	intake_motor.move_voltage(0);
 	intake_motor.brake();
+#endif
 }
 
 void openClawFor(std::uint32_t durationMs) {
+#ifdef JOKR_HAS_INTAKE_MOTOR
 	openClaw();
 	const std::uint32_t startTime = pros::millis();
 	while (pros::millis() - startTime < durationMs && !pros::competition::is_disabled()) {
 		pros::delay(10);
 	}
 	stopClaw();
+#else
+	(void)durationMs;
+#endif
 }

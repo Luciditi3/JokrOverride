@@ -2,10 +2,19 @@
 #include "rw/api.h"
 
 // Your own devices (besides the ones RW uses, which are in rw/devices.h), defined in src/rw-config.cpp
+// Uncomment a feature define and its device declaration in src/rw-config.cpp
+// only after confirming the device's actual smart port.
+// #define JOKR_HAS_INTAKE_MOTOR
+// Also define JOKR_INTAKE_MOTOR_PORT to its wired smart port.
+// #define JOKR_HAS_SIDE_TOGGLE
+// Also define JOKR_SIDE_TOGGLE_MOTOR_PORT to its wired smart port.
+#ifdef JOKR_HAS_INTAKE_MOTOR
 extern pros::Motor intake_motor;
+#endif
+#ifdef JOKR_HAS_SIDE_TOGGLE
 extern pros::Motor side_toggle;
+#endif
 extern pros::MotorGroup lift;
-extern pros::Distance intake_distance;
 
 // Autonomous routines (src/rw-autons.cpp). Select the routine directly in main.cpp.
 void exampleAuton();

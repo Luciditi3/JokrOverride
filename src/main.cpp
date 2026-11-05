@@ -15,7 +15,8 @@ std::atomic<bool> scoring_task_available{false};
 
 constexpr pros::controller_analog_e_t drive_forward_axis = pros::E_CONTROLLER_ANALOG_LEFT_Y;
 constexpr pros::controller_analog_e_t drive_turn_axis = pros::E_CONTROLLER_ANALOG_RIGHT_X;
-constexpr std::int32_t manual_lift_voltage = 9000;
+constexpr std::int32_t manual_lift_up_voltage = 11880;
+constexpr std::int32_t manual_lift_down_voltage = 6000;
 
 double readStick(pros::controller_analog_e_t axis) {
 	return controller_1.get_analog(axis) * 100.0 / 127.0;
@@ -25,9 +26,11 @@ double readStick(pros::controller_analog_e_t axis) {
 
 void initialize() {
 	pros::delay(100);
+#ifdef JOKR_HAS_SIDE_TOGGLE
 	if (side_toggle.set_brake_mode(pros::MotorBrake::coast) == PROS_ERR) {
 		robot_screen::showError("side toggle brake", errno);
 	}
+#endif
 	initializeLift();
 	initializeClaw();
 	runPreAutonomous();
@@ -39,15 +42,7 @@ void initialize() {
 				if (pros::competition::is_disabled() || pros::competition::is_autonomous()) {
 					scoring_active.store(false);
 				} else {
-					const bool completed = score(true);
-					if (completed && !pros::competition::is_disabled() &&
-					    !pros::competition::is_autonomous()) {
-						pros::delay(250);
-						if (!pros::competition::is_disabled() &&
-						    !pros::competition::is_autonomous()) {
-							reset();
-						}
-					}
+					score(true);
 					scoring_active.store(false);
 				}
 			}
@@ -65,7 +60,9 @@ void disabled() {
 	score_requested.store(false);
 	scoring_active.store(false);
 	stopChassis(pros::MotorBrake::brake);
+#ifdef JOKR_HAS_SIDE_TOGGLE
 	side_toggle.brake();
+#endif
 	stopClaw();
 	lift.move_voltage(0);
 }
@@ -82,17 +79,21 @@ void opcontrol() {
 
 	bool previous_b = false;
 	bool previous_l2 = false;
+#ifdef JOKR_HAS_SIDE_TOGGLE
 	bool previous_r2 = false;
+#endif
 	bool manual_lift_active = false;
-	bool l1_raise_active = false;
+#ifdef JOKR_HAS_SIDE_TOGGLE
 	bool side_toggle_active = false;
+#endif
 	bool scoring_was_active = false;
+#ifdef JOKR_HAS_SIDE_TOGGLE
 	std::uint32_t side_toggle_stop_time = 0;
+#endif
 	int claw_mode = 0;
 
 	while (true) {
 		driverArcade(readStick(drive_forward_axis), readStick(drive_turn_axis));
-
 		const bool l1 = controller_1.get_digital(pros::E_CONTROLLER_DIGITAL_L1);
 		const bool x = controller_1.get_digital(pros::E_CONTROLLER_DIGITAL_X);
 		const bool y = controller_1.get_digital(pros::E_CONTROLLER_DIGITAL_Y);
@@ -100,33 +101,22 @@ void opcontrol() {
 		const bool a = controller_1.get_digital(pros::E_CONTROLLER_DIGITAL_A);
 		const bool l2 = controller_1.get_digital(pros::E_CONTROLLER_DIGITAL_L2);
 		const bool r1 = controller_1.get_digital(pros::E_CONTROLLER_DIGITAL_R1);
+#ifdef JOKR_HAS_SIDE_TOGGLE
 		const bool r2 = controller_1.get_digital(pros::E_CONTROLLER_DIGITAL_R2);
+#endif
 
-		if (!scoring_active.load()) {
-			if (x || y) {
-				setManualLiftVoltage(x ? manual_lift_voltage : -manual_lift_voltage);
-				manual_lift_active = true;
-				l1_raise_active = false;
-			} else {
-				if (manual_lift_active) {
-					setManualLiftVoltage(0);
-					manual_lift_active = false;
-				}
-				if (l1 && !l1_raise_active) {
-					beginLiftRaise();
-					l1_raise_active = true;
-				} else if (!l1 && l1_raise_active) {
-					finishLiftRaise();
-					l1_raise_active = false;
-				}
+		if (l1 || x || y) {
+			setManualLiftVoltage((l1 || x) ? manual_lift_up_voltage
+			                               : -manual_lift_down_voltage);
+			manual_lift_active = true;
+		} else {
+			if (manual_lift_active) {
+				setManualLiftVoltage(0);
+				manual_lift_active = false;
 			}
-
-			if (b && !previous_b) {
+			if (!scoring_active.load() && b && !previous_b) {
 				reset();
 			}
-		} else {
-			manual_lift_active = false;
-			l1_raise_active = false;
 		}
 		if (l2 && !previous_l2) {
 			bool expected = false;
@@ -136,6 +126,7 @@ void opcontrol() {
 			}
 		}
 
+#ifdef JOKR_HAS_SIDE_TOGGLE
 		if (r2 && !previous_r2) {
 			side_toggle.move_voltage(12000);
 			side_toggle_active = true;
@@ -146,6 +137,7 @@ void opcontrol() {
 			side_toggle.brake();
 			side_toggle_active = false;
 		}
+#endif
 
 		const bool currently_scoring = scoring_active.load();
 		if (currently_scoring) {
@@ -170,7 +162,9 @@ void opcontrol() {
 
 		previous_b = b;
 		previous_l2 = l2;
+#ifdef JOKR_HAS_SIDE_TOGGLE
 		previous_r2 = r2;
+#endif
 		pros::delay(10);
 	}
 }

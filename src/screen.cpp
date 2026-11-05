@@ -16,32 +16,20 @@ std::atomic<bool> error_status_read_failure_reported{false};
 pros::Mutex error_mutex;
 char latest_error[96] = "";
 
-void formatDistance(char* output, std::size_t size, std::int32_t millimeters) {
-	if (millimeters >= 0 && millimeters < 9999) {
-		std::snprintf(output, size, "%.2f", millimeters / 25.4);
-	} else {
-		std::snprintf(output, size, "--");
-	}
-}
-
 void drawTelemetry() {
-	char front[12], left[12], right[12], back[12], claw[12];
-	formatDistance(front, sizeof(front), front_sensor.get());
-	formatDistance(left, sizeof(left), left_sensor.get());
-	formatDistance(right, sizeof(right), right_sensor.get());
-	formatDistance(back, sizeof(back), back_sensor.get());
-	formatDistance(claw, sizeof(claw), intake_distance.get());
-
-	pros::screen::print(pros::E_TEXT_MEDIUM, 8, 6,
-	                    "POSE X %.1f Y %.1f in  H %.1f deg          ",
+	pros::screen::print(pros::E_TEXT_MEDIUM, 0,
+	                    "POSE X %.1f Y %.1f in  T %.1f deg          ",
 	                    x_pos, y_pos, getInertialHeading());
-	pros::screen::print(pros::E_TEXT_MEDIUM, 8, 30, "LIFT %.1f deg                    ",
+	pros::screen::print(pros::E_TEXT_MEDIUM, 1, "LIFT %.1f deg                    ",
 	                    lift.get_position());
-	pros::screen::print(pros::E_TEXT_MEDIUM, 8, 54,
-	                    "DIST Front %s  Left %s in          ", front, left);
-	pros::screen::print(pros::E_TEXT_MEDIUM, 8, 78,
-	                    "DIST Right %s  Back %s in          ", right, back);
-	pros::screen::print(pros::E_TEXT_MEDIUM, 8, 102, "CLAW %s in                    ", claw);
+	pros::screen::print(pros::E_TEXT_MEDIUM, 2, "CLAW DIST --                    ");
+	pros::screen::print(pros::E_TEXT_MEDIUM, 3, "DIST F --  L --  R --  B --     ");
+	pros::screen::print(pros::E_TEXT_MEDIUM, 4, "DRIVE L %.0f  R %.0f rpm        ",
+	                    left_chassis.get_actual_velocity(),
+	                    right_chassis.get_actual_velocity());
+	pros::screen::print(pros::E_TEXT_MEDIUM, 5, "TRACK H %.1f  V %.1f deg        ",
+	                    horizontal_tracker.get_position() / 100.0,
+	                    vertical_tracker.get_position() / 100.0);
 
 	char error[sizeof(latest_error)];
 	if (error_mutex.take()) {
@@ -49,7 +37,7 @@ void drawTelemetry() {
 		if (!error_mutex.give()) {
 			std::printf("telemetry: failed to release the error-status mutex (errno %d)\n", errno);
 		} else if (error[0] != '\0') {
-			pros::screen::print(pros::E_TEXT_MEDIUM, 8, 210, "ERROR: %.35s", error);
+			pros::screen::print(pros::E_TEXT_MEDIUM, 9, "ERROR: %.35s", error);
 		}
 		error_status_read_failure_reported.store(false);
 	} else if (!error_status_read_failure_reported.exchange(true)) {
@@ -61,16 +49,7 @@ void drawTelemetry() {
 void startTelemetry() {
 	static const auto telemetry_task = pros::Task::create([] {
 		while (true) {
-			if (pros::competition::is_autonomous()) {
-				if (!tuningActive()) {
-					drawTelemetry();
-				}
-			} else if (!pros::competition::is_disabled()) {
-				clearTuning();
-				controller_1.print(1, 0, "X %.1f Y %.1f H %.1f", x_pos, y_pos, getInertialHeading());
-			} else {
-				clearTuning();
-			}
+			if (!tuningActive()) drawTelemetry();
 			pros::delay(200);
 		}
 	}, "Robot telemetry");
@@ -98,12 +77,7 @@ void showError(const char* message, int error_code) {
 		std::printf("showError: failed to store the latest error (errno %d)\n", errno);
 	}
 
-	if (controller_1.print(2, 0, "ERR: %.18s", formatted) == PROS_ERR) {
-		std::printf("showError: failed to display the error on the controller (errno %d)\n", errno);
-	}
-	if (pros::competition::is_autonomous()) {
-		pros::screen::print(pros::E_TEXT_MEDIUM, 8, 210, "ERROR: %.35s", formatted);
-	}
+	pros::screen::print(pros::E_TEXT_MEDIUM, 9, "ERROR: %.35s", formatted);
 }
 
 void setTuningActive(bool active) {

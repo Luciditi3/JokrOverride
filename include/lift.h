@@ -18,7 +18,7 @@ void setManualLiftVoltage(std::int32_t millivolts);
 void beginLiftRaise();
 void finishLiftRaise();
 void reset();
-bool score(bool driverRequest = false);
+void score(bool driverRequest = false);
 
 
 #endif

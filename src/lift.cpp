@@ -5,6 +5,7 @@
 #include "pros/error.h"
 
 #include <algorithm>
+#include <atomic>
 #include <cerrno>
 #include <cmath>
 #include <cstdio>
@@ -23,6 +24,7 @@ std::int32_t manual_voltage = 0;
 bool raising_to_checkpoint = false;
 bool scoring_in_progress = false;
 bool gravity_hold_enabled = false;
+std::atomic<bool> driver_lift_override{false};
 constexpr double intake_nudge_degrees = 10.0;
 constexpr double lift_max_degrees = 135.0;
 constexpr double raise_rate_degrees_per_second = 45.0;
@@ -40,6 +42,7 @@ void liftControlTask(void*) {
 				target_degrees = clampLiftTarget(position);
 			}
 			manual_voltage = 0;
+			driver_lift_override.store(false);
 			raising_to_checkpoint = false;
 			scoring_in_progress = false;
 			gravity_hold_enabled = false;
@@ -61,6 +64,12 @@ void liftControlTask(void*) {
 		const double limit = voltage_limit;
 		const std::int32_t manual = manual_voltage;
 		target_mutex.give();
+
+		if (manual != 0) {
+			lift.move_voltage(manual);
+			pros::delay(10);
+			continue;
+		}
 
 		const double position = lift.get_position();
 		const double velocity = lift.get_actual_velocity();
@@ -96,23 +105,22 @@ void initializeLift() {
 
 	if (lift.tare_position_all() == PROS_ERR) {
 		robot_screen::showError("lift tare", errno);
-		lift.move_voltage(0);
-		return;
 	}
 
 	target_mutex.take();
 	const double position = lift.get_position();
 	if (!std::isfinite(position)) {
-		target_mutex.give();
 		robot_screen::showError("invalid lift encoder");
-		lift.move_voltage(0);
-		return;
+		target_degrees = 0.0;
+		gravity_hold_enabled = false;
+	} else {
+		target_degrees = clampLiftTarget(position);
+		gravity_hold_enabled = position > lift_positions[0];
 	}
-	target_degrees = clampLiftTarget(position);
 	manual_voltage = 0;
+	driver_lift_override.store(false);
 	raising_to_checkpoint = false;
 	scoring_in_progress = false;
-	gravity_hold_enabled = position > lift_positions[0];
 	target_mutex.give();
 
 	static const auto controller = pros::Task::create(
@@ -168,11 +176,16 @@ void slowDescent() {
 void setManualLiftVoltage(std::int32_t millivolts) {
 	target_mutex.take();
 	if (millivolts == 0) {
-		target_degrees = lift.get_position();
+		driver_lift_override.store(false);
+		const double position = lift.get_position();
+		if (std::isfinite(position)) {
+			target_degrees = position;
+		}
 		manual_voltage = 0;
-		gravity_hold_enabled = target_degrees > lift_positions[0];
+		gravity_hold_enabled = std::isfinite(position) && target_degrees > lift_positions[0];
 	} else {
-		manual_voltage = millivolts > 9000 ? 9000 : (millivolts < -9000 ? -9000 : millivolts);
+		driver_lift_override.store(true);
+		manual_voltage = millivolts > 12000 ? 12000 : (millivolts < -12000 ? -12000 : millivolts);
 		raising_to_checkpoint = false;
 		gravity_hold_enabled = false;
 	}
@@ -208,15 +221,19 @@ void finishLiftRaise() {
 	target_mutex.give();
 }
 
-bool score(bool driverRequest) {
+void score(bool driverRequest) {
 	const double position = lift.get_position();
 	if (!std::isfinite(position)) {
 		robot_screen::showError("invalid lift encoder");
-		return false;
+		return;
 	}
 
 	const double target = std::max(lift_positions[0], position - 5.0);
 	target_mutex.take();
+	if (driverRequest && driver_lift_override.load()) {
+		target_mutex.give();
+		return;
+	}
 	scoring_in_progress = true;
 	target_degrees = target;
 	manual_voltage = -1500;
@@ -229,8 +246,9 @@ bool score(bool driverRequest) {
 	const std::uint32_t start_time = pros::millis();
 	bool encoder_fault = false;
 	while (pros::millis() - start_time < 750) {
-		if (driverRequest &&
-		    (pros::competition::is_disabled() || pros::competition::is_autonomous())) {
+		if (pros::competition::is_disabled() ||
+		    (driverRequest && (pros::competition::is_autonomous() ||
+		                       driver_lift_override.load()))) {
 			break;
 		}
 		const double current_position = lift.get_position();
@@ -244,8 +262,15 @@ bool score(bool driverRequest) {
 		pros::delay(10);
 	}
 
-	const bool canceled = driverRequest &&
-		(pros::competition::is_disabled() || pros::competition::is_autonomous());
+	const bool canceled = pros::competition::is_disabled() ||
+		(driverRequest && (pros::competition::is_autonomous() ||
+		                   driver_lift_override.load()));
+	if (canceled && driver_lift_override.load()) {
+		target_mutex.take();
+		scoring_in_progress = false;
+		target_mutex.give();
+		return;
+	}
 	const double final_position = lift.get_position();
 	encoder_fault = encoder_fault || !std::isfinite(final_position);
 	target_mutex.take();
@@ -261,17 +286,25 @@ bool score(bool driverRequest) {
 	target_mutex.give();
 	if (encoder_fault) {
 		robot_screen::showError("lift encoder during descent");
-		return false;
+		return;
 	}
 	if (canceled) {
-		return false;
+		return;
 	}
 
 	openClawFor(150);
 	target_mutex.take();
 	scoring_in_progress = false;
 	target_mutex.give();
-	return true;
+
+	if (driverRequest && !pros::competition::is_disabled() &&
+	    !pros::competition::is_autonomous()) {
+		pros::delay(250);
+		if (!pros::competition::is_disabled() &&
+		    !pros::competition::is_autonomous()) {
+			reset();
+		}
+	}
 }
 
 void reset() {

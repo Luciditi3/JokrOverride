@@ -224,14 +224,22 @@ void runTuningTest() {
     case 9:
       announceTest(9, "Intake and side-toggle checks",
                    "Clear both mechanisms; keep hands away.");
+#ifdef JOKR_HAS_INTAKE_MOTOR
       intake_motor.move_voltage(4000);
+#endif
       pros::delay(250);
+#ifdef JOKR_HAS_INTAKE_MOTOR
       intake_motor.brake();
+#endif
       robot_screen::printLine(4, "Intake pulse complete; check direction.");
       if (!testCanceled()) {
+#ifdef JOKR_HAS_SIDE_TOGGLE
         side_toggle.move_voltage(12000);
+#endif
         pros::delay(100);
+#ifdef JOKR_HAS_SIDE_TOGGLE
         side_toggle.brake();
+#endif
       }
       robot_screen::printLine(5, "Toggle pulse complete; check clearance.");
       break;

@@ -93,10 +93,14 @@ void asyncExample() {
   // Start driving in the background, then start the intake 12 inches into the move
   runAsync([]{ moveToPoint(0, 48, 1, 3000); });
   waitUntilTraveled(12);
+#ifdef JOKR_HAS_INTAKE_MOTOR
   intake_motor.move_voltage(12000);
+#endif
 
   // Stop the move early once the intake sensor sees an object
+#ifdef JOKR_HAS_INTAKE_MOTOR
   intake_motor.brake();
+#endif
 
   // Turn around and drive back
   runAsync([]{
@@ -133,13 +137,17 @@ void profiledExample() {
 
 void fourPin() {
   setPose(-62, 0, 90);
+#ifdef JOKR_HAS_SIDE_TOGGLE
   side_toggle.move_voltage(12000);
+#endif
   pros::delay(500); // Wait for the side toggle to move
 
   //drive to the 
   driveProfiled(3, 200);
   runAsync([]{boomerang(-49, -17, 1, 165, 0.3, 1000); });
+#ifdef JOKR_HAS_INTAKE_MOTOR
   intake_motor.move_voltage(1000);
+#endif
 
   // score once at the goal
   moveTo(1);
@@ -155,7 +163,9 @@ void fourPin() {
   reset();
   //go to the inside pin
   driveProfiled(13, 750);
+#ifdef JOKR_HAS_INTAKE_MOTOR
   intake_motor.move_voltage(7000);
+#endif
   swing(260, 1, 350);
   swing(227, -1, 300);
 
@@ -176,7 +186,9 @@ void fourPin() {
 
   //turn to the stacks
   turnProfiled(125, 400);
+#ifdef JOKR_HAS_INTAKE_MOTOR
   intake_motor.move_voltage(7000);
+#endif
   driveProfiled(27, 1000);
 
   //go to the goal
@@ -196,7 +208,9 @@ void fourPin() {
   });
   reset();
   driveProfiled(30,1200);
+#ifdef JOKR_HAS_INTAKE_MOTOR
   intake_motor.move_voltage(7000);
+#endif
 
   //go to score
   turnProfiled(0,800);
@@ -228,7 +242,9 @@ void skills() {
   runAsync([]{
   driveProfiled(10, 1000);
   });
+#ifdef JOKR_HAS_INTAKE_MOTOR
   intake_motor.move_voltage(7000);
+#endif
 
   //go back to the goal
   driveProfiled(-6, 500);
@@ -255,7 +271,9 @@ void skills() {
   runAsync([]{
   driveProfiled(10, 1000);
   });
+#ifdef JOKR_HAS_INTAKE_MOTOR
   intake_motor.move_voltage(7000);
+#endif
 
   //go back to the goal
   driveProfiled(-6, 500);
@@ -282,7 +300,9 @@ void skills() {
   runAsync([]{
   driveProfiled(10, 1000);
   });
+#ifdef JOKR_HAS_INTAKE_MOTOR
   intake_motor.move_voltage(7000);
+#endif
 
   //go to next loader
   driveProfiled(-6, 500);
@@ -301,7 +321,9 @@ void skills() {
   driveProfiled(-6,600);
   turnProfiled(330, 500);
   driveProfiled(11, 1000);
+#ifdef JOKR_HAS_INTAKE_MOTOR
   intake_motor.move_voltage(7000);
+#endif
   swing(270, 1, 1000);
   swing(0,-1, 1000);
 

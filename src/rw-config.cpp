@@ -12,28 +12,35 @@ pros::Controller controller_1(pros::E_CONTROLLER_MASTER);
 // Override (2026-27) rule R11 caps drivetrain motors at 55W total, e.g. 4 x 11W, 5 x 11W, or 4 x 11W + 2 x 5.5W.
 // Drive encoder readings come from the FIRST motor in each group, so with mixed motors
 // list an 11W motor first and set wheel_distance_in for that motor's gearing.
-pros::MotorGroup left_chassis({-8, -2, -1}, pros::MotorGearset::blue);
-pros::MotorGroup right_chassis({3, 9, 10}, pros::MotorGearset::blue);
+pros::MotorGroup left_chassis({-2, -1}, pros::MotorGearset::blue);
+pros::MotorGroup right_chassis({11, 12}, pros::MotorGearset::blue);
 // X-drive, mecanum or H-drive: see the docs (Guide > Drive Types) for the motors to make here and
 // the line to add to runPreAutonomous() in src/rw-user.cpp
 
-pros::Imu inertial_sensor(18);
+pros::Imu inertial_sensor(5);
 
 // Tracking wheels (a negative port reverses one). Give them any free ports if you don't use tracking wheels
 pros::Rotation horizontal_tracker(4);
-pros::Rotation vertical_tracker(-17);
+pros::Rotation vertical_tracker(16);
 
 // Distance reset sensors. Give them any free ports if you don't use distance resets
-pros::Distance front_sensor(14);
-pros::Distance left_sensor(19);
-pros::Distance right_sensor(15);
-pros::Distance back_sensor(12);
+
 
 // Your own devices
-pros::MotorGroup lift({20, -13}, pros::MotorGearset::red);
-pros::Motor intake_motor(-11, pros::MotorGearset::green);//claw
-pros::Motor side_toggle(21, pros::MotorGearset::green);
-pros::Distance intake_distance(16);//not real
+pros::MotorGroup lift({-10, 19}, pros::MotorGearset::red);
+#ifdef JOKR_HAS_INTAKE_MOTOR
+#ifndef JOKR_INTAKE_MOTOR_PORT
+#error "Set JOKR_INTAKE_MOTOR_PORT to the wired intake port in include/rw-config.h"
+#endif
+pros::Motor intake_motor(JOKR_INTAKE_MOTOR_PORT, pros::MotorGearset::green);
+#endif
+#ifdef JOKR_HAS_SIDE_TOGGLE
+#ifndef JOKR_SIDE_TOGGLE_MOTOR_PORT
+#error "Set JOKR_SIDE_TOGGLE_MOTOR_PORT to the wired side-toggle port in include/rw-config.h"
+#endif
+pros::Motor side_toggle(JOKR_SIDE_TOGGLE_MOTOR_PORT, pros::MotorGearset::green);
+#endif
+//pros::Distance intake_distance(16);//not real
 
 // ============================================================================
 // USER-CONFIGURABLE PARAMETERS (CHANGE BEFORE USING THIS TEMPLATE)
@@ -41,7 +48,7 @@ pros::Distance intake_distance(16);//not real
 
 // Distance between the middles of the left and right wheels of the drive (in inches)
 // (mecanum: plus the distance between the front and back wheels, see the docs: Guide > Drive Types)
-double distance_between_wheels = 11.5;
+double distance_between_wheels = 10.5;
 
 // motor to wheel gear ratio * wheel diameter (in inches) * pi
 // (X-drive: also * 0.707, see the docs: Guide > Drive Types)
@@ -52,11 +59,11 @@ double wheel_distance_in = (36.0 / 48.0) * 2.75 * M_PI;
 // turn_*     : PID for turning in place
 // heading_correction_* : PID for heading correction during linear movement
 double distance_kp = 1.1,
-       distance_ki = 0.1, 
-       distance_kd = 7;
+       distance_ki = 0.0,
+       distance_kd = 0;
 double turn_kp = 0.3, 
        turn_ki = 0, 
-       turn_kd = 2.5;
+       turn_kd = 0;
 double heading_correction_kp = 0.6,
     heading_correction_ki = 0, heading_correction_kd = 4;
 
